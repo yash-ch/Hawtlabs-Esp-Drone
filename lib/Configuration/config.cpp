@@ -109,6 +109,10 @@ void handleRoot()
     html += "Ki Yaw: <input name='ki_yaw' value='" + String(IRateYaw, 4) + "'><br>";
     html += "Kd Yaw: <input name='kd_yaw' value='" + String(DRateYaw, 4) + "'><br><br>";
 
+    html += "<h3>Trim</h3>";
+    html += "Trim Roll: <input name='trim_roll' value='" + String(trimRoll, 4) + "'><br>";
+    html += "Trim Pitch: <input name='trim_pitch' value='" + String(trimPitch, 4) + "'><br>";
+
     html += "<input type='submit' value='Update PID Values'>";
     html += "</form><br><br>";
 
@@ -179,6 +183,15 @@ void handleUpdate()
     {
         DRateYaw = server.arg("kd_yaw").toFloat();
     }
+
+    if (server.hasArg("trim_roll"))
+    {
+        trimRoll = server.arg("trim_roll").toFloat();
+    }
+    if (server.hasArg("trim_pitch"))
+    {
+        trimPitch = server.arg("trim_pitch").toFloat();
+    }
     savePID(); // Save updated PID values to preferences
     server.send(200, "text/html", "<h3>Settings Updated! <a href='/'>Back</a></h3>");
 }
@@ -204,6 +217,9 @@ void savePID()
         prefs.putFloat("kp_yaw", PRateYaw);
         prefs.putFloat("ki_yaw", IRateYaw);
         prefs.putFloat("kd_yaw", DRateYaw);
+
+        prefs.putFloat("trim_roll", trimRoll);
+        prefs.putFloat("trim_pitch", trimPitch);
         prefs.end();
     }
     else
@@ -233,6 +249,10 @@ void loadPID()
         PRatePitch = prefs.getFloat("kp_pitch", 1.0);
         IRatePitch = prefs.getFloat("ki_pitch", 0.0);
         DRatePitch = prefs.getFloat("kd_pitch", 0.0);
+
+        trimRoll = prefs.getFloat("trim_roll", 0.0);
+        trimPitch = prefs.getFloat("trim_pitch", 0.0);
+        
         prefs.end();
     }
     else
@@ -246,4 +266,29 @@ void turnOffWiFi()
     WiFi.disconnect(true);    // Disconnect and erase stored credentials
     WiFi.mode(WIFI_OFF);      // Turn off Wi-Fi hardware
     wifi_config_mode = false; // Disable Wi-Fi config mode
+}
+
+void testMotor(int speed, int motor)
+{
+    if (motor == 1)
+        mot1.writeMicroseconds(speed); // Set motor 1 speed
+    else if (motor == 2)
+        mot2.writeMicroseconds(speed); // Set motor 2 speed
+    else if (motor == 3)
+        mot3.writeMicroseconds(speed); // Set motor 3 speed
+    else if (motor == 4)
+        mot4.writeMicroseconds(speed); // Set motor 4 speed
+    delay(1000);
+}
+
+void stopMotor(int motor)
+{
+    if (motor == 1)
+        mot1.writeMicroseconds(1000); // Stop motor 1
+    else if (motor == 2)
+        mot2.writeMicroseconds(1000); // Stop motor 2
+    else if (motor == 3)
+        mot3.writeMicroseconds(1000); // Stop motor 3
+    else if (motor == 4)
+        mot4.writeMicroseconds(1000); // Stop motor 4
 }

@@ -2,18 +2,20 @@
 
 #include <Arduino.h>
 #include <Wire.h>
+#include <ESP32Servo.h>
 
 #define LED1 13
 // #define LED2 14
 // #define LED3 21
 
-#define MOTOR1 11
-#define MOTOR2 12
-#define MOTOR3 35
-#define MOTOR4 36
+#define MOTOR1_PIN 11
+#define MOTOR2_PIN 12
+#define MOTOR3_PIN 35
+#define MOTOR4_PIN 36
 #define PWM_CHANNEL 0
-#define PWM_FREQ 25000        // 16 kHz is ideal for brushed motors
+#define PWM_FREQ 500
 #define PWM_RESOLUTION 8 
+#define PID_RATE 250 // PID loop rate in Hz
 
 extern float RateRoll, RatePitch, RateYaw;
 extern float rateCalibrationRoll, rateCalibrationPitch, rateCalibrationYaw;
@@ -56,9 +58,16 @@ extern float IAnglePitch;
 extern float DAngleRoll; 
 extern float DAnglePitch;
 
+extern volatile float trimRoll;   // in degrees
+extern volatile float trimPitch;  // in degrees
 
 // motor outputs
 extern float MotorInput1, MotorInput2, MotorInput3, MotorInput4;
+
+extern Servo mot1;
+extern Servo mot2;
+extern Servo mot3;
+extern Servo mot4;
 
 void gyro_signals(void);
 

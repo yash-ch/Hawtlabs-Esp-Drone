@@ -45,24 +45,22 @@ float IAnglePitch = 0;
 float DAngleRoll = 0;
 float DAnglePitch = 0;
 
-float NewMotorInput1 =0;
-float NewMotorInput2 =0;
-float NewMotorInput3 =0;
-float NewMotorInput4 =0;
+float NewMotorInput1 = 0;
+float NewMotorInput2 = 0;
+float NewMotorInput3 = 0;
+float NewMotorInput4 = 0;
 
+Servo mot1;
+Servo mot2;
+Servo mot3;
+Servo mot4;
+
+volatile float trimRoll = 0.0f;
+volatile float trimPitch = 0.0f;
 
 void imuPIDTask(void *pv)
 {
     pinMode(LED1, OUTPUT);
-    ledcSetup(0, PWM_FREQ, PWM_RESOLUTION);
-    ledcSetup(1, PWM_FREQ, PWM_RESOLUTION);
-    ledcSetup(2, PWM_FREQ, PWM_RESOLUTION);
-    ledcSetup(3, PWM_FREQ, PWM_RESOLUTION);
-
-    ledcAttachPin(MOTOR1, 0);
-    ledcAttachPin(MOTOR2, 1);
-    ledcAttachPin(MOTOR3, 2);
-    ledcAttachPin(MOTOR4, 3);
 
     Wire.setClock(400000); // Set I2C clock speed
     Wire.begin();
@@ -72,6 +70,34 @@ void imuPIDTask(void *pv)
     Wire.write(0x00);
     Wire.endTransmission();
     delay(1000);
+
+    ESP32PWM::allocateTimer(0);
+    ESP32PWM::allocateTimer(1);
+    ESP32PWM::allocateTimer(2);
+    ESP32PWM::allocateTimer(3);
+    delay(1000);
+    mot1.attach(MOTOR1_PIN, 1000, 2000);
+    delay(1000);
+    mot1.setPeriodHertz(PWM_FREQ);
+    delay(100);
+    mot2.attach(MOTOR2_PIN, 1000, 2000);
+    delay(1000);
+    mot2.setPeriodHertz(PWM_FREQ);
+    delay(100);
+    mot3.attach(MOTOR3_PIN, 1000, 2000);
+    delay(1000);
+    mot3.setPeriodHertz(PWM_FREQ);
+    delay(100);
+    mot4.attach(MOTOR4_PIN, 1000, 2000);
+    delay(1000);
+    mot4.setPeriodHertz(PWM_FREQ);
+    delay(100);
+
+    mot1.writeMicroseconds(1000);
+    mot2.writeMicroseconds(1000);
+    mot3.writeMicroseconds(1000);
+    mot4.writeMicroseconds(1000);
+    delay(500);
 
     while (1)
     {
@@ -125,8 +151,8 @@ void imuPIDTask(void *pv)
             KalmanAnglePitch = Kalman1DOutput[0];
             KalmanUncertaintyAnglePitch = Kalman1DOutput[1];
 
-            DesiredAngleRoll = 0.10 * (rcChannels[0] - 1500);
-            DesiredAnglePitch = 0.10 * (rcChannels[1] - 1500);
+            DesiredAngleRoll = 0.10 * (rcChannels[0] - 1500) + trimRoll;
+            DesiredAnglePitch = 0.10 * (rcChannels[1] - 1500) + trimPitch;
             InputThrottle = rcChannels[2];
             DesiredRateYaw = 0.15 * (rcChannels[3] - 1500);
             ErrorAngleRoll = DesiredAngleRoll - KalmanAngleRoll;
@@ -163,10 +189,10 @@ void imuPIDTask(void *pv)
             if (InputThrottle > 1900)
                 InputThrottle = 1900;
 
-            MotorInput4 = (InputThrottle - InputRoll - InputPitch - InputYaw);
-            MotorInput3 = (InputThrottle - InputRoll + InputPitch + InputYaw);
-            MotorInput2 = (InputThrottle + InputRoll + InputPitch - InputYaw);
-            MotorInput1 = (InputThrottle + InputRoll - InputPitch + InputYaw);
+            MotorInput1 = (InputThrottle - InputRoll - InputPitch - InputYaw);
+            MotorInput2 = (InputThrottle - InputRoll + InputPitch + InputYaw);
+            MotorInput3 = (InputThrottle + InputRoll + InputPitch - InputYaw);
+            MotorInput4 = (InputThrottle + InputRoll - InputPitch + InputYaw);
 
             if (MotorInput1 > 2000)
                 MotorInput1 = 1999;
@@ -202,21 +228,22 @@ void imuPIDTask(void *pv)
             NewMotorInput3 = map(MotorInput3, 1000, 2000, 0, 255);
             NewMotorInput4 = map(MotorInput4, 1000, 2000, 0, 255);
 
-            ledcWrite(0, NewMotorInput1);
-            ledcWrite(1, NewMotorInput2);
-            ledcWrite(2, NewMotorInput3);
-            ledcWrite(3, NewMotorInput4);
+            mot1.writeMicroseconds(MotorInput1);
+            mot2.writeMicroseconds(MotorInput2);
+            mot3.writeMicroseconds(MotorInput3);
+            mot4.writeMicroseconds(MotorInput4);
 
-            while (micros() - LoopTimer < 2000)
+            while (micros() - LoopTimer < (1000000 / PID_RATE))
                 ;
             LoopTimer = micros();
         }
         else
         {
-            ledcWrite(0, 0);
-            ledcWrite(1, 0);
-            ledcWrite(2, 0);
-            ledcWrite(3, 0);
+            reset_pid();
+            mot1.writeMicroseconds(0);
+            mot2.writeMicroseconds(0);
+            mot3.writeMicroseconds(0);
+            mot4.writeMicroseconds(0);
         }
     }
 }
@@ -276,12 +303,12 @@ void gyro_signals(void)
 void pid_equation(float Error, float P, float I, float D, float PrevError, float PrevIterm)
 {
     float Pterm = P * Error;
-    float Iterm = PrevIterm + I * (Error + PrevError) * 0.002 / 2.0f;
+    float Iterm = PrevIterm + I * (Error + PrevError) * (1 / PID_RATE) / 2.0f;
     if (Iterm > 400)
         Iterm = 400;
     else if (Iterm < -400)
         Iterm = -400;
-    float Dterm = D * (Error - PrevError) / 0.002;
+    float Dterm = D * (Error - PrevError) / (1 / PID_RATE);
     float PIDOutput = Pterm + Iterm + Dterm;
     if (PIDOutput > 400)
         PIDOutput = 400;
@@ -294,8 +321,8 @@ void pid_equation(float Error, float P, float I, float D, float PrevError, float
 
 void kalman_1d(float KalmanState, float KalmanUncertainty, float KalmanInput, float KalmanMeasurement)
 {
-    KalmanState = KalmanState + 0.002 * KalmanInput;
-    KalmanUncertainty = KalmanUncertainty + 0.002 * 0.002 * 4 * 4;
+    KalmanState = KalmanState + (1 / PID_RATE) * KalmanInput;
+    KalmanUncertainty = KalmanUncertainty + (1 / PID_RATE) * (1 / PID_RATE) * 4 * 4;
     float KalmanGain = KalmanUncertainty * 1 / (1 * KalmanUncertainty + 3 * 3);
     KalmanState = KalmanState + KalmanGain * (KalmanMeasurement - KalmanState);
     KalmanUncertainty = (1 - KalmanGain) * KalmanUncertainty;
